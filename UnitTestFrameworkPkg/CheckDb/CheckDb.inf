@@ -1,0 +1,44 @@
+## @file
+# Component description file for Cpu module.
+#
+# This CPU module abstracts the interrupt subsystem of a platform and the CPU-specific setjump-long pair.
+#
+# Copyright (c) 2006 - 2018, Intel Corporation. All rights reserved.<BR>
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = CheckDb
+  FILE_GUID                      = 6156e471-498c-41a1-868c-11083ddf3f0f
+  MODULE_TYPE                    = HOST_APPLICATION
+  VERSION_STRING                 = 1.0
+
+#
+# The following information is for reference only and not required by the build tools.
+#
+#  VALID_ARCHITECTURES           = IA32 X64 EBC
+#
+
+[Sources]
+  CheckDb.c
+  CheckDb.h
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  EmulatorPkg/EmulatorPkg.dec
+  CryptoPkg/CryptoPkg.dec
+
+[LibraryClasses]
+  DebugLib
+  BaseLib
+  BaseCryptLib
+  BaseMemoryLib
+
+[Guids]
+  gEfiCertX509Guid
+  gEfiCertPkcs7Guid
+  gEfiImageSecurityDatabaseGuid
