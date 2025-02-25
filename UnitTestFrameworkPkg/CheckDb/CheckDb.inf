@@ -24,12 +24,10 @@
 
 [Sources]
   CheckDb.c
-  CheckDb.h
 
 [Packages]
   MdePkg/MdePkg.dec
   MdeModulePkg/MdeModulePkg.dec
-  EmulatorPkg/EmulatorPkg.dec
   CryptoPkg/CryptoPkg.dec
 
 [LibraryClasses]
@@ -41,4 +39,3 @@
 [Guids]
   gEfiCertX509Guid
   gEfiCertPkcs7Guid
-  gEfiImageSecurityDatabaseGuid
