@@ -8,6 +8,18 @@
 #include <Guid/ImageAuthentication.h>
 #include <Library/BaseLib.h>
 
+int
+check_main(
+  int   argc,
+  char  *argv[]
+);
+
+int
+show_main(
+  int   argc,
+  char  *argv[]
+);
+
 errno_t
 read_file_to_buf (
   char     *filename,
@@ -22,7 +34,7 @@ print_x509_info (
   );
 
 int
-work (
+check_work (
   CHAR8     *db_filename,
   CHAR8     *key_filename,
   CHAR16    *var_name,
@@ -31,12 +43,44 @@ work (
   );
 
 void
-print_help (
+print_help () {
+  printf("Please use below subcommand:\n");
+  printf("CheckDb check - verify a signed SecureBoot database file\n");
+  printf("CheckDb show - to dump authenticator header of a signed SecureBoot database file.\n");
+}
+
+int
+main (
+  int   argc,
+  char  *argv[]
+  )
+{
+  CHAR8 *SubCommand = NULL;
+
+  if (argc < 2) {
+    print_help();
+    return 1;
+  }
+
+  SubCommand = argv[1];
+
+  if (AsciiStrCmp(SubCommand, "check") == 0) {
+    return check_main(argc - 2, &argv[2]);
+  } else if (AsciiStrCmp(SubCommand, "show") == 0) {
+    return show_main(argc - 2, &argv[2]);
+  } else {
+    print_help();
+    return 1;
+  }
+}
+
+void
+print_check_help (
   )
 {
   printf ("CheckDB\n");
   printf ("A tool to check if the given DB / DBX file is signed by the specific KEK / PK\n");
-  printf ("CheckDB <db / dbx file> <kek / pk file> <variable name> <vendor guid> <variable attribute>\n\n");
+  printf ("CheckDB check <db / dbx file> <kek / pk file> <variable name> <vendor guid> <variable attribute>\n\n");
 
   printf ("Variable name, vendor guid and variable attribute is used to generate the hash for signature verification.\n");
   printf ("It should match the data provided when the DB / DBX is signed and will be used.\n");
@@ -51,11 +95,10 @@ print_help (
 }
 
 int
-main (
+check_main(
   int   argc,
   char  *argv[]
-  )
-{
+) {
   EFI_GUID    var_guid;
   CHAR16      *var_name    = NULL;
   UINTN       var_name_len = 0;
@@ -65,11 +108,11 @@ main (
   CHAR8       *var_attr_end = NULL;
 
   if (argc != 6) {
-    print_help ();
+    print_check_help ();
     goto Exit;
   }
 
-  var_name_len = AsciiStrSize (argv[3]);
+  var_name_len = AsciiStrSize (argv[2]);
   // The length returned by AsciiStrSize should already includes the null character
   var_name = malloc (var_name_len * sizeof (CHAR16));
   if (var_name == NULL) {
@@ -77,30 +120,30 @@ main (
     goto Exit;
   }
 
-  efi_st = AsciiStrToUnicodeStrS (argv[3], var_name, var_name_len * sizeof (CHAR16));
+  efi_st = AsciiStrToUnicodeStrS (argv[2], var_name, var_name_len * sizeof (CHAR16));
   if (EFI_ERROR (efi_st)) {
     printf ("Converting variable name to UNICODE string failed.\n");
     goto Exit;
   }
 
-  efi_st = AsciiStrToGuid (argv[4], &var_guid);
+  efi_st = AsciiStrToGuid (argv[3], &var_guid);
   if (EFI_ERROR (efi_st)) {
     printf ("Parsing variable guid failed.\n");
     goto Exit;
   }
 
-  if ((AsciiStrLen (argv[5]) >= 3) && (CompareMem (argv[5], "0x", 2) == 0)) {
-    efi_st = AsciiStrHexToUint64S (argv[5], &var_attr_end, &var_attr64);
+  if ((AsciiStrLen (argv[4]) >= 3) && (CompareMem (argv[4], "0x", 2) == 0)) {
+    efi_st = AsciiStrHexToUint64S (argv[4], &var_attr_end, &var_attr64);
   } else {
-    efi_st = AsciiStrDecimalToUint64S (argv[5], &var_attr_end, &var_attr64);
+    efi_st = AsciiStrDecimalToUint64S (argv[4], &var_attr_end, &var_attr64);
   }
 
-  if (EFI_ERROR (efi_st) || var_attr_end == argv[5]) {
+  if (EFI_ERROR (efi_st) || var_attr_end == argv[4]) {
     printf ("Parsing variable attribute failed.\n");
     goto Exit;
   }
 
-  return_val = work (argv[1], argv[2], var_name, &var_guid, (UINT32)var_attr64);
+  return_val = check_work (argv[0], argv[1], var_name, &var_guid, (UINT32)var_attr64);
 
 Exit:
   if (var_name != NULL) {
@@ -111,7 +154,7 @@ Exit:
 }
 
 int
-work (
+check_work (
   CHAR8     *db_filename,
   CHAR8     *key_filename,
   CHAR16    *variable_name,
@@ -341,4 +384,88 @@ print_x509_info (
       }
     }
   }
+}
+
+void
+print_show_help() {
+  printf("CheckDb show <DB file>\n");
+  printf("This subcommand display the authentication header of a singed KEK / DB / DBX file.");
+}
+
+int
+show_main(
+  int   argc,
+  char  *argv[]
+) {
+  errno_t err = 0;
+  UINT8                          *db_buf           = NULL;
+  UINTN                          db_size           = 0;
+  EFI_VARIABLE_AUTHENTICATION_2 *var_auth = NULL;
+  UINTN                          pkcs7_data_size = 0;
+  UINT8                          *pkcs7_data     = NULL;
+  EFI_CERT_STACK *signer_stack = NULL;
+  UINTN signer_stack_size = 0;
+  UINT8 *trusted_cert = NULL;
+  UINTN trusted_cert_size = 0;
+  EFI_CERT_DATA *cert_data;
+  UINTN idx;
+
+  if (argc != 1) {
+    print_show_help();
+    err = 1;
+    goto Exit;
+  }
+
+  err = read_file_to_buf(argv[0], &db_buf, &db_size);
+  if (err != 0) {
+    goto Exit;
+  }
+  if (db_size < sizeof(EFI_VARIABLE_AUTHENTICATION_2)) {
+    printf("File size seems smaller than expected. Is this a valid db file?\n");
+    err = 1;
+    goto Exit;
+  }
+  var_auth = (EFI_VARIABLE_AUTHENTICATION_2*)db_buf;
+
+  printf("Authentication header time stamp: %04d-%02d-%02d %02d:%02d:%02d\n",
+    var_auth->TimeStamp.Year,
+    var_auth->TimeStamp.Month,
+    var_auth->TimeStamp.Day,
+    var_auth->TimeStamp.Hour,
+    var_auth->TimeStamp.Minute,
+    var_auth->TimeStamp.Second
+  );
+  
+  pkcs7_data_size = (UINTN)var_auth->AuthInfo.Hdr.dwLength - OFFSET_OF (WIN_CERTIFICATE_UEFI_GUID, CertData);
+  pkcs7_data      = (UINT8 *)(&var_auth->AuthInfo.CertData[0]);
+  Pkcs7GetSigners(
+    pkcs7_data,
+    pkcs7_data_size,
+    (UINT8**)&signer_stack,
+    &signer_stack_size,
+    &trusted_cert,
+    &trusted_cert_size
+  );
+
+  printf("Trusted cert: ");
+  print_x509_info((UINT8*)trusted_cert, trusted_cert_size);
+
+  cert_data = (EFI_CERT_DATA*)(signer_stack + 1);
+  for (idx = 0; idx < signer_stack->CertNumber; idx += 1) {
+    printf("Signer stack %lld: ", idx);
+    print_x509_info((UINT8*)&cert_data->CertDataBuffer[0], cert_data->CertDataLength);
+    cert_data = (EFI_CERT_DATA*)((UINT8*)cert_data + cert_data->CertDataLength + sizeof(EFI_CERT_DATA) - sizeof(cert_data->CertDataBuffer[0]));
+  }
+
+Exit:
+  if (db_buf != NULL) {
+    free(db_buf);
+  }
+  if (signer_stack != NULL) {
+    free(signer_stack);
+  }
+  if (trusted_cert != NULL) {
+    free(trusted_cert);
+  }
+  return err;
 }
