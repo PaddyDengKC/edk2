@@ -107,7 +107,7 @@ check_main(
   UINT64      var_attr64    = 0;
   CHAR8       *var_attr_end = NULL;
 
-  if (argc != 6) {
+  if (argc != 5) {
     print_check_help ();
     goto Exit;
   }
@@ -435,7 +435,7 @@ show_main(
     var_auth->TimeStamp.Minute,
     var_auth->TimeStamp.Second
   );
-  
+
   pkcs7_data_size = (UINTN)var_auth->AuthInfo.Hdr.dwLength - OFFSET_OF (WIN_CERTIFICATE_UEFI_GUID, CertData);
   pkcs7_data      = (UINT8 *)(&var_auth->AuthInfo.CertData[0]);
   Pkcs7GetSigners(
